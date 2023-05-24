@@ -24,21 +24,22 @@ class ViewportsTool extends Autodesk.Viewing.ToolInterface {
     this.snapper = new Autodesk.Viewing.Extensions.Snapping.Snapper(this.viewer, { renderSnappedGeometry: false, renderSnappedTopology: false });
     this.viewer.toolController.registerTool(this.snapper);
     this.viewer.toolController.activateTool(this.snapper.getName());
-    console.log('DimensionsTool registered.');
+    console.log('viewportstool registered.');
   }
 
   deregister() {
     this.viewer.toolController.deactivateTool(this.snapper.getName());
     this.viewer.toolController.deregisterTool(this.snapper);
     this.snapper = null;
-    console.log('DimensionsTool unregistered.');
+    console.log('viewportstool unregistered.');
   }
 
   activate(name, viewer) {
     if (!this.active) {
       this.viewer.overlays.addScene(ViewportsOverlayName);
-      console.log('DimensionsTool activated.');
+      console.log('viewportstool activated.');
       this.active = true;
+      this.handleContextMenu();
     }
   }
 
@@ -47,7 +48,7 @@ class ViewportsTool extends Autodesk.Viewing.ToolInterface {
       this.viewer.overlays.removeScene(ViewportsOverlayName);
       console.log('DimensionsTool deactivated.');
       this.active = false;
-      this._reset();
+      this.unregisterContexts();
     }
   }
 
@@ -65,68 +66,92 @@ class ViewportsTool extends Autodesk.Viewing.ToolInterface {
     return false;
   }
 
-  async handleRightClick(event){
-    viewer.registerContextMenuCallback('your-custom-callback-id', function (menu, status) {
+  async handleContextMenu(){
+    this.unregisterContexts();
+    
+    viewer.registerContextMenuCallback('gotoview', function (menu, status) {
       // Customize your menu here
       menu.push({
         title: 'Go to View',
-        target: this.handleViewportLoad()
+        target: function() {
+          const tool = viewer.getExtension('ViewportsBrowserToolExtension').tool;
+          const result = tool.snapper.getSnapResult();
+          const { SnapType } = Autodesk.Viewing.MeasureCommon;
+          let selectedPoint = result.intersectPoint.clone();
+          tool.viewport = tool.getViewport(selectedPoint, tool.viewer);
+
+          if(!!tool.viewport){
+            try {
+              let doc = tool.viewer.model.getDocumentNode().getDocument();
+              let viewportViewGuid = tool.viewport.viewportRaw.viewGuid;
+              let viewable = tool.viewer.model.getDocumentNode().parent.data.children.find(n => n.guid == viewportViewGuid);
+              tool.viewer.loadDocumentNode(doc, viewable);
+            } catch (error) {
+              //this means we had an error trying to retrieve points or view
+            }
+          }
+        }
       });
     });
-    
-    viewer.unregisterContextMenuCallback('your-custom-callback-id');
+
+    viewer.registerContextMenuCallback('listelements', function (menu, status) {
+      // Customize your menu here
+      menu.push({
+        title: 'List Elements',
+        target: async function() {
+          const tool = viewer.getExtension('ViewportsBrowserToolExtension').tool;
+          const result = tool.snapper.getSnapResult();
+          const { SnapType } = Autodesk.Viewing.MeasureCommon;
+          let selectedPoint = result.intersectPoint.clone();
+          tool.viewport = tool.getViewport(selectedPoint, tool.viewer);
+          if (!!tool.viewport) {
+            try{
+              let viewportElementsDbIds = await tool.getViewportElements(tool.viewer, tool.viewport);
+              tool.viewer.clearSelection();
+              console.log(viewportElementsDbIds);
+              alert('Check the elements dbids in the console!');
+            }
+            catch(error){
+              console.log(error);
+            }
+          }
+        }
+      });
+    });
+
+    viewer.registerContextMenuCallback('gotosheet', function (menu, status) {
+      // Customize your menu here
+      menu.push({
+        title: 'Go to Sheet',
+        target: function() {
+          const tool = viewer.getExtension('ViewportsBrowserToolExtension').tool;
+          try {
+            tool.viewer.model.getBulkProperties([tool.viewer.getSelection()[0]], ['Sheet Number', 'Sheet Name'], props => {
+              tool.sheetNumber = props[0].properties[0].displayValue;
+              tool.sheetName = props[0].properties[1].displayValue;
+              if(!!tool.sheetNumber && !!tool.sheetName){
+                let doc = tool.viewer.model.getDocumentNode().getDocument();
+                let viewNode = doc.getRoot().findAllViewables().find(v => v.data.name=='Sheets').children.find(n => n.data.name.includes(tool.sheetNumber) && n.data.name.includes(tool.sheetName))
+                tool.viewer.loadDocumentNode(doc, viewNode);
+              }
+            });
+          } catch (error) {
+            //this means we had an error trying to retrieve points or view
+          }
+        }
+      });
+    });
   }
 
-  async handleViewportElements(event, button) {
-    if (!this.active) {
-      return false;
+  unregisterContexts(){
+    try{
+      viewer.unregisterContextMenuCallback('gotoview');
+      viewer.unregisterContextMenuCallback('gotosheet');
+      viewer.unregisterContextMenuCallback('listelements');
     }
-
-    if (button === 0 && this.snapper.isSnapped()) {
-      const result = this.snapper.getSnapResult();
-      const { SnapType } = Autodesk.Viewing.MeasureCommon;
-      let selectedPoint = result.intersectPoint.clone();
-      let viewport = this.getViewport(selectedPoint, this.viewer);
-      let viewportElementsDbIds = await this.getViewportElements(this.viewer, viewport);
-      this.viewer.clearSelection();
-      console.log(viewportElementsDbIds);
+    catch(error){
+      console.log(error);
     }
-    return false;
-  }
-
-  async handleViewportLoad(event){
-    if (!this.active) {
-      return false;
-    }
-
-    if (button === 0 && this.snapper.isSnapped()) {
-      const result = this.snapper.getSnapResult();
-      const { SnapType } = Autodesk.Viewing.MeasureCommon;
-      let selectedPoint = result.intersectPoint.clone();
-      let data = {};
-      let viewport = this.getViewport(selectedPoint, this.viewer);
-      try {
-        this.viewer.loadDocumentNode(doc, viewables);
-      } catch (error) {
-        //this means we had an error trying to retrieve points or view
-      }
-      console.log(data);
-    }
-  }
-
-  findGuidView(viewable, guid) {
-    var guidViews = [];
-    // master views are under the "folder" with this UUID
-    if (viewable.data.type === 'folder' && viewable.data.name === guid) {
-      return viewable.children;
-    }
-    if (viewable.children === undefined) return;
-    viewable.children.forEach((children) => {
-      var mv = findGuidView(children, guid);
-      if (mv === undefined || mv.length == 0) return;
-      guidViews = guidViews.concat(mv);
-    })
-    return guidViews;
   }
 
   async getViewportElements(viewer, viewport){
