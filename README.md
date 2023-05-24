@@ -38,6 +38,8 @@ Once we have the viewport, we can go further.
 
 With the viewport defined, we can use another extension to grab all of the elements inside it.
 
+![Listing the elements](./images/listelements.gif)
+
 We can use `BoxSelection` extension for that, just like in the snippet below:
 
 ```js
@@ -57,7 +59,11 @@ In this case, we're basically creating a rectangle that contains the whole viewp
 
 #### Finding the View referenced by the viewport
 
-Once we have the viewport, we can also have access to its view, just like in tha snippet below:
+Once we have the viewport, we can also have access to its view.
+
+![Finding the view from viewport]()
+
+This is done with the help of the snippet below:
 
 ```js
 let doc = tool.viewer.model.getDocumentNode().getDocument();
@@ -69,4 +75,36 @@ let viewable = doc
   .children.find((n) => n.guid == viewportViewGuid);
 // In the line below we load the referenced view ;)
 tool.viewer.loadDocumentNode(doc, viewable);
+```
+
+#### Finding the Sheet referenced by the annotation in the sheet
+
+For this we don't need the vieport. We are just taking advantage of an element in the sheet that contains the sheet name and id.
+
+![Finding the sheet from the annotation element](./images/gotosheet.gif)
+
+We are doing that based on this element selection, just like in the snippet below:
+
+```js
+tool.viewer.model.getBulkProperties(
+  [tool.viewer.getSelection()[0]],
+  ["Sheet Number", "Sheet Name"],
+  (props) => {
+    tool.sheetNumber = props[0].properties[0].displayValue;
+    tool.sheetName = props[0].properties[1].displayValue;
+    if (!!tool.sheetNumber && !!tool.sheetName) {
+      let doc = tool.viewer.model.getDocumentNode().getDocument();
+      let viewNode = doc
+        .getRoot()
+        .findAllViewables()
+        .find((v) => v.data.name == "Sheets")
+        .children.find(
+          (n) =>
+            n.data.name.includes(tool.sheetNumber) &&
+            n.data.name.includes(tool.sheetName)
+        );
+      tool.viewer.loadDocumentNode(doc, viewNode);
+    }
+  }
+);
 ```
