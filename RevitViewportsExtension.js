@@ -84,9 +84,10 @@ class ViewportsTool extends Autodesk.Viewing.ToolInterface {
             try {
               let doc = tool.viewer.model.getDocumentNode().getDocument();
               let viewportViewGuid = tool.viewport.viewportRaw.viewGuid;
-              let viewable = tool.viewer.model.getDocumentNode().parent.data.children.find(n => n.guid == viewportViewGuid);
+              let viewable = doc.getRoot().findAllViewables().find(v => v.data.name=='Sheets').children.find(n => n.guid == viewportViewGuid);
               tool.viewer.loadDocumentNode(doc, viewable);
             } catch (error) {
+              console.log(error);
               //this means we had an error trying to retrieve points or view
             }
           }
@@ -131,11 +132,12 @@ class ViewportsTool extends Autodesk.Viewing.ToolInterface {
               tool.sheetName = props[0].properties[1].displayValue;
               if(!!tool.sheetNumber && !!tool.sheetName){
                 let doc = tool.viewer.model.getDocumentNode().getDocument();
-                let viewNode = doc.getRoot().findAllViewables().find(v => v.data.name=='Sheets').children.find(n => n.data.name.includes(tool.sheetNumber) && n.data.name.includes(tool.sheetName))
+                let viewNode = doc.getRoot().findAllViewables().find(v => v.data.name=='Sheets').children.find(n => n.data.name.includes(tool.sheetNumber) && n.data.name.includes(tool.sheetName));
                 tool.viewer.loadDocumentNode(doc, viewNode);
               }
             });
           } catch (error) {
+            console.log(error)
             //this means we had an error trying to retrieve points or view
           }
         }
